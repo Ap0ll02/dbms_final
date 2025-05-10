@@ -1,0 +1,44 @@
+-- view 1
+CREATE VIEW [Class Search] AS
+SELECT 
+  c.Subject || ' ' || c.Catalog AS Course,
+  c.Subject AS Subject,
+  c.Catalog AS Catalog,
+  cs.[Class Nbr], 
+  cs.Section,
+  m.[Class Days] || ' ' || m.[Class Start Time] || ' - ' || m.[Class End Time] AS [Days & Times],
+  m.Room,
+  i.[Instructor First Name] || ' ' || i.[Instructor Last Name] AS Instructor,
+  m.[Start Date] || ' - ' || m.[End Date] AS [Meeting Dates],
+  cs.[Class Stat],
+  m.Session
+FROM section_instructor si
+JOIN instructor i ON si.instructor_id = i.instructor_id
+JOIN course_section cs ON si.[Class Nbr] = cs.[Class Nbr]
+JOIN meeting m ON cs.meeting_id = m.meeting_id
+JOIN course c ON cs.course_id = c.course_id;
+
+-- 1
+SELECT Course, [Class Nbr], Section, [Days & Times], Room, Instructor, [Meeting Dates], [Class Stat]
+from [Class Search]
+where Session = '1';
+
+-- 2
+SELECT Course, [Class Nbr], Section, [Days & Times], Room, Instructor, [Meeting Dates], [Class Stat]
+from [Class Search]
+WHERE Catalog < 300;
+
+-- 3
+SELECT Course, [Class Nbr], Section, [Days & Times], Room, Instructor, [Meeting Dates], [Class Stat]
+from [Class Search]
+WHERE Course like 'CS 135';
+
+-- 4
+SELECT Course, [Class Nbr], Section, [Days & Times], Room, Instructor, [Meeting Dates], [Class Stat]
+from [Class Search]
+WHERE Catalog >= 300;
+
+-- 5
+SELECT Course, [Class Nbr], Section, [Days & Times], Room, Instructor, [Meeting Dates], [Class Stat]
+from [Class Search]
+WHERE Instructor like '%Keith' or Instructor like '%Hastings' and Course like 'CS%';
