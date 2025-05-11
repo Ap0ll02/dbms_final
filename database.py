@@ -1,14 +1,45 @@
-import pandas as pd
 import sqlite3 as sql
+import pandas as pd
 
+# Connect to database and enable foreign keys
 conn = sql.connect("unr_schedule.db")
 cursor = conn.cursor()
-
 cursor.execute("PRAGMA foreign_keys = ON;")
+
+# Create tables (using provided new schema)
+cursor.execute("""
+CREATE TABLE College (
+    CollegeID TEXT PRIMARY KEY,
+    CollegeName TEXT
+);
+""")
+
+cursor.execute("""
+CREATE TABLE Status (
+    StatusID TEXT PRIMARY KEY,
+    StatusCode TEXT
+);
+""")
+
+cursor.execute("""
+CREATE TABLE Room (
+    RoomID TEXT PRIMARY KEY,
+    RoomNo TEXT,
+    RoomCapacity INTEGER
+);
+""")
+
+cursor.execute("""
+CREATE TABLE Instructor (
+    InstructorID TEXT PRIMARY KEY,
+    InstructorFirstName TEXT,
+    InstructorLastName TEXT
+);
+""")
 
 cursor.execute("""
 CREATE TABLE Class (
-    ClassID TEXT PRIMARY KEY,
+    ClassID INTEGER PRIMARY KEY,
     Title TEXT,
     Catalog INTEGER,
     Subject TEXT,
@@ -22,7 +53,8 @@ CREATE TABLE Class (
 
 cursor.execute("""
 CREATE TABLE Section (
-    SectionClassID TEXT PRIMARY KEY,
+    SectionClassID INTEGER PRIMARY KEY,
+    ClassID INTEGER,
     ClassDays TEXT,
     StartTime REAL,
     EndTime REAL,
@@ -31,11 +63,11 @@ CREATE TABLE Section (
     Room TEXT,
     Component TEXT,
     IsCombined TEXT,
-    WaitlistCapactity INTEGER,
+    WaitlistCapacity INTEGER,
     WaitlistTotal INTEGER,
-    ProgressUnt INTEGER,
+    PrgrssUnt INTEGER,
     StatusID TEXT,
-    Session INTEGER,
+    Term INTEGER,
     InstructionMode TEXT,
     FOREIGN KEY (Room) REFERENCES Room(RoomID),
     FOREIGN KEY (StatusID) REFERENCES Status(StatusID)
@@ -44,7 +76,7 @@ CREATE TABLE Section (
 
 cursor.execute("""
 CREATE TABLE SectionInstructor (
-    SectionClassID TEXT,
+    SectionClassID INTEGER,
     InstructorID TEXT,
     PRIMARY KEY (SectionClassID, InstructorID),
     FOREIGN KEY (SectionClassID) REFERENCES Section(SectionClassID),
@@ -52,117 +84,146 @@ CREATE TABLE SectionInstructor (
 );
 """)
 
-cursor.execute("""
-CREATE TABLE Instructor (
-    InstructorID TEXT PRIMARY KEY,
-    InstructorFirstName TEXT,
-    InstructorLastName TEXT
-);
-""")
-
-cursor.execute("""
-CREATE TABLE Room (
-    RoomID TEXT PRIMARY KEY,
-    RoomNo TEXT,
-    RoomCapacity INTEGER
-);
-""")
-
-cursor.execute("""
-CREATE TABLE Status (
-    StatusID TEXT PRIMARY KEY,
-    StatusCode TEXT
-);
-""")
-
-cursor.execute("""
-CREATE TABLE College (
-    CollegeID TEXT PRIMARY KEY,
-    CollegeName TEXT
-);
-""")
-
+# Read CSV
 df = pd.read_csv('sample ClassSched-CS-S25.csv', header=1)
-# === College Table ===
-college_table = df[
-        ['College', 'Acad Org', 'Acad Group']
-        ].drop_duplicates().reset_index(drop=True)
-college_table.insert(0, 'college_id', range(1, len(college_table) + 1))
-df = df.merge(college_table, on=[
-    'College', 'Acad Org', 'Acad Group'
-    ], how='left')
 
-# === Course Table ===
-course_table = df[
-        ['Subject', 'Catalog', 'Title', 'Prgrss Unt', 'college_id']
-        ].drop_duplicates().reset_index(drop=True)
-course_table.insert(0, 'course_id', range(1, len(course_table) + 1))
-df = df.merge(
-        course_table, on=[
-            'Subject', 'Catalog', 'Title', 'Prgrss Unt', 'college_id'
-         ], how='left')
+# College table
+college_table = df[['College']].drop_duplicates().reset_index(drop=True)
+college_table.columns = ['CollegeName']
+college_table['CollegeID'] = college_table.index.astype(str) + '_COL'
 
-# === Meeting Table ===
-meeting_table = df[
-        ['Class Days',
-         'Session',
-         'Class Start Time',
-         'Class End Time',
-         'Start Date',
-         'End Date',
-         'Room']].drop_duplicates().reset_index(drop=True)
-meeting_table.insert(0, 'meeting_id', range(1, len(meeting_table) + 1))
-df = df.merge(meeting_table, on=[
-    'Class Days', 'Session', 'Class Start Time', 'Class End Time',
-    'Start Date', 'End Date', 'Room'
-    ], how='left')
+# Status table
+status_table = df[['Class Stat']].drop_duplicates().reset_index(drop=True)
+status_table.columns = ['StatusCode']
+status_table['StatusID'] = status_table.index.astype(str) + '_STAT'
 
-# === Course Section Table ===
-section_table = df[
-        ['Class Nbr', 'Section', 'Instruction Mode', 'Component', 'Class Stat',
-         'Combined?', 'course_id', 'meeting_id']
-        ].drop_duplicates().reset_index(drop=True)
-section_table.rename(columns={'Class Nbr': 'class_nbr'}, inplace=True)
+# Room table
+room_table = df[['Room', 'Room Capacity']].drop_duplicates().reset_index(drop=True)
+room_table.columns = ['RoomNo', 'RoomCapacity']
+room_table['RoomID'] = room_table.index.astype(str) + '_ROOM'
 
-# === Instructor Table ===
-instructor_table = df[
-        ['Instructor Last Name', 'Instructor First Name']
-        ].drop_duplicates().reset_index(drop=True)
-instructor_table.insert(
-        0, 'instructor_id', range(1, len(instructor_table) + 1))
-df = df.merge(instructor_table, on=[
-    'Instructor Last Name', 'Instructor First Name'
-    ], how='left')
+# Instructor table
+instructor_table = df[['Instructor First Name', 'Instructor Last Name']].drop_duplicates().reset_index(drop=True)
+instructor_table.columns = ['InstructorFirstName', 'InstructorLastName']
+instructor_table['InstructorID'] = instructor_table.index.astype(str) + '_INST'
 
-# === Section Instructor Table ===
-section_instructor_table = df[
-        ['Class Nbr', 'instructor_id']
-        ].drop_duplicates().reset_index(drop=True)
-section_instructor_table.rename(
-        columns={'Class Nbr': 'class_nbr'}, inplace=True)
+# Merge IDs back to main dataframe
+df = df.merge(college_table, left_on='College', right_on='CollegeName', how='left')
+df = df.merge(status_table, left_on='Class Stat', right_on='StatusCode', how='left')
+df = df.merge(room_table, left_on=['Room', 'Room Capacity'], right_on=['RoomNo', 'RoomCapacity'], how='left')
+df = df.merge(instructor_table, left_on=['Instructor First Name', 'Instructor Last Name'], 
+              right_on=['InstructorFirstName', 'InstructorLastName'], how='left')
 
-# === Classroom Table ===
-classroom_table = df[
-        ['Room', 'Room Capacity']
-        ].drop_duplicates().reset_index(drop=True)
+# Class table
+class_table = df[[
+    'Title', 
+    'Catalog', 
+    'Subject', 
+    'Section', 
+    'Enrollment Capacity',  # Match CSV column
+    'CollegeID', 
+    'Session'
+]].drop_duplicates().reset_index(drop=True)
+class_table.columns = ['Title', 'Catalog', 'Subject', 'Section', 'Enrollment_Capacity', 'CollegeID', 'Term']
+class_table.insert(0, 'ClassID', range(1, len(class_table) + 1))
 
-# === Enrollment Table ===
-enrollment_table = df[
-        ['Class Nbr', 'Enrollment Capacity',
-         'Current Enrollment', 'Waitlist Capacity',
-         'Waitlist Total']].drop_duplicates().reset_index(drop=True)
-enrollment_table.rename(columns={'Class Nbr': 'class_nbr'}, inplace=True)
+# Merge ClassID
+df = df.merge(class_table, 
+              left_on=[
+                  'Title', 'Catalog', 'Subject', 'Section',
+                  'Enrollment Capacity', 'CollegeID', 'Session'],
+              right_on=['Title', 'Catalog', 'Subject', 'Section', 'Enrollment_Capacity',
+                        'CollegeID', 'Term'], 
+              how='left')
 
-# === Insert into DB ===
-college_table.to_sql("college", conn, if_exists="append", index=False)
-course_table.to_sql("course", conn, if_exists="append", index=False)
-classroom_table.to_sql("classroom", conn, if_exists="append", index=False)
-meeting_table.to_sql("meeting", conn, if_exists="append", index=False)
-instructor_table.to_sql("instructor", conn, if_exists="append", index=False)
-section_table.to_sql("course_section", conn, if_exists="append", index=False)
-section_instructor_table.to_sql(
-        "section_instructor", conn, if_exists="append", index=False)
-enrollment_table.to_sql("enrollment", conn, if_exists="append", index=False)
+# Section table
+section_table = df[[
+    'ClassID',
+    'Class Days',
+    'Class Start Time',
+    'Class End Time',
+    'Start Date',
+    'End Date',
+    'RoomID',
+    'Component',
+    'Combined?',
+    'Waitlist Capacity',
+    'Waitlist Total',
+    'Prgrss Unt',
+    'StatusID',
+    'Session',
+    'Instruction Mode'
+]].drop_duplicates().reset_index(drop=True)
+section_table.columns = [
+    'ClassID',
+    'ClassDays',
+    'StartTime',
+    'EndTime',
+    'StartDate',
+    'EndDate',
+    'Room',
+    'Component',
+    'IsCombined',
+    'WaitlistCapacity',
+    'WaitlistTotal',
+    'PrgrssUnt',
+    'StatusID',
+    'Term',
+    'InstructionMode'
+]
+section_table.insert(0, 'SectionClassID', range(1, len(section_table) + 1))
+# Debug: Print columns before section_table merge
+print("DF Columns before section_table merge:", df.columns.tolist())
+print("Section Table Columns:", section_table.columns.tolist())
+# Merge SectionClassID
+df = df.merge(section_table, 
+              left_on=[
+                  'ClassID',
+                  'Class Days',
+                  'Class Start Time',
+                  'Class End Time',
+                  'Start Date',
+                  'End Date',
+                  'RoomID',
+                  'Component',
+                  'Combined?',
+                  'Waitlist Capacity',
+                  'Waitlist Total',
+                  'Prgrss Unt',
+                  'StatusID',
+                  'Session',
+                  'Instruction Mode'
+              ], 
+              right_on=[
+                  'ClassID',
+                  'ClassDays',
+                  'StartTime',
+                  'EndTime',
+                  'StartDate',
+                  'EndDate',
+                  'Room',
+                  'Component',
+                  'IsCombined',
+                  'WaitlistCapacity',
+                  'WaitlistTotal',
+                  'PrgrssUnt',
+                  'StatusID',
+                  'Term',
+                  'InstructionMode'
+              ])
 
+# SectionInstructor table
+section_instructor_table = df[['SectionClassID', 'InstructorID']].drop_duplicates().reset_index(drop=True)
+
+# Insert data into tables
+college_table.to_sql("College", conn, if_exists="append", index=False)
+status_table.to_sql("Status", conn, if_exists="append", index=False)
+room_table.to_sql("Room", conn, if_exists="append", index=False)
+instructor_table.to_sql("Instructor", conn, if_exists="append", index=False)
+class_table.to_sql("Class", conn, if_exists="append", index=False)
+section_table.to_sql("Section", conn, if_exists="append", index=False)
+section_instructor_table.to_sql("SectionInstructor", conn, if_exists="append", index=False)
+
+# Commit and close
 conn.commit()
 conn.close()
